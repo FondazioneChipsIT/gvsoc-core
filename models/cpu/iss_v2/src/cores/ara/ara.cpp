@@ -18,28 +18,14 @@
  * Authors: Germain Haugou (germain.haugou@gmail.com)
  */
 
-#pragma once
+#include "cpu/iss_v2/include/iss.hpp"
 
-#include <cpu/iss_v2/include/types.hpp>
-#include <cpu/iss_v2/include/insn.hpp>
-#include <cpu/iss_v2/include/csr.hpp>
-#include <cpu/iss_v2/include/vector.hpp>
-#include <cpu/iss_v2/include/cores/vector_unit/vector_unit.hpp>
-
-class Iss;
-
-class Ara
+Ara::Ara(Iss &iss)
+: iss(iss), vu(iss)
 {
-public:
-    Ara(Iss &iss);
+}
 
-    void start() {}
-    void stop() {}
-    void reset(bool active);
-
-    Vu vu;
-
-private:
-
-    Iss &iss;
-};
+void Ara::reset(bool active)
+{
+    this->vu.reset(active);
+}

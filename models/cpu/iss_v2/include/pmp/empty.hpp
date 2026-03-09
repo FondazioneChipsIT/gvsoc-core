@@ -1,5 +1,6 @@
 /*
- * Copyright (C) 2020 ETH Zurich and University of Bologna
+ * Copyright (C) 2020 GreenWaves Technologies, SAS, ETH Zurich and
+ *                    University of Bologna
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,31 +16,22 @@
  */
 
 /*
- * Authors: Germain Haugou (germain.haugou@gmail.com)
+ * Authors: Germain Haugou, GreenWaves Technologies (germain.haugou@greenwaves-technologies.com)
  */
 
 #pragma once
 
-#include <cpu/iss_v2/include/types.hpp>
-#include <cpu/iss_v2/include/insn.hpp>
-#include <cpu/iss_v2/include/csr.hpp>
-#include <cpu/iss_v2/include/vector.hpp>
-#include <cpu/iss_v2/include/cores/vector_unit/vector_unit.hpp>
+#include <vp/vp.hpp>
 
-class Iss;
 
-class Ara
+class PmpEmpty
 {
 public:
-    Ara(Iss &iss);
+    PmpEmpty(Iss &iss) {}
 
     void start() {}
     void stop() {}
-    void reset(bool active);
-
-    Vu vu;
+    void reset(bool active) {}
 
 private:
-
-    Iss &iss;
 };
