@@ -464,6 +464,18 @@ void RouterBackpressure::send_handler(vp::Block *__this, vp::ClockEvent *event)
 
     _this->forward(in, req, mapping_id, /*from_delayed=*/true);
     // forward() handles all three outcomes including restoring pending_req on DENIED.
+
+    // Once we drop out of the pending-req window, the input is free to accept
+    // new requests again. If a master tried to issue while we were busy it
+    // got the "one-pending rule" deny (line 316) — that path doesn't set
+    // denied_on_output[], so retry_muxed() would never wake the master.
+    // Signal retry() here so the master can re-send. forward() may have
+    // restored pending_req on a from_delayed re-deny, in which case we do
+    // NOT advertise readiness yet.
+    if (in->pending_req == nullptr)
+    {
+        in->itf.retry();
+    }
 }
 
 void RouterBackpressure::resp_muxed(vp::Block *__this, vp::IoReq *req, int /*id*/)

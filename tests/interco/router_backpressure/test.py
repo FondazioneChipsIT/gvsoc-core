@@ -120,6 +120,34 @@ def build_case(case_name: str) -> dict:
             'targets': [('t0', t0_base, window, ok_rule)],
         }
 
+    if case_name == 'one_pending_rule_deny':
+        # Router latency=5 -> the first request takes the deferred-forward
+        # path and parks pending_req for 5 cycles. A second issue from the
+        # same input lands inside that window and must hit the
+        # "one-pending rule" deny at the top of req_muxed. The router then
+        # owes a retry() to the master once pending_req clears in
+        # send_handler — that's the contract the test guards.
+        #
+        # Expected timeline:
+        #   t=10  master SEND r0      -> GRANTED (pending_req=r0)
+        #   t=12  master SEND r1      -> DENIED (pending_req still r0)
+        #         master pushes r1 onto denied_queue, waits for retry()
+        #   t=15  send_handler r0     -> forward -> target DONE -> RESP r0
+        #         (pending_req=NULL; router should call in->itf.retry())
+        #   master RETRY               -> re-issues r1 -> GRANTED
+        #   t=20  send_handler r1     -> RESP r1
+        #
+        # Without retry() fired from send_handler, the master never drains
+        # denied_queue and r1 RESP never appears -> test FAILS.
+        return {
+            'config': RouterConfig(kind='backpressure', latency=5, bandwidth=0),
+            'schedule': [
+                dict(cycle=10, addr=t0_base + 0x100, size=4, is_write=False, name='r0'),
+                dict(cycle=12, addr=t0_base + 0x200, size=4, is_write=False, name='r1'),
+            ],
+            'targets': [('t0', t0_base, window, ok_rule)],
+        }
+
     raise ValueError(f'Unknown case: {case_name}')
 
 
