@@ -444,13 +444,13 @@ typedef struct iss_rnnext_s
 } iss_rnnext_t;
 
 #include <vp/vp.hpp>
-// The io_v2 LSU variant (CONFIG_GVSOC_ISS_LSU_V2) pulls in the v2 IO
+// The io_v2 LSU variant (CONFIG_GVSOC_ISS_LSU_V2) and the io_v2 Spatz
+// VLSU variant (CONFIG_GVSOC_ISS_VLSU_V2) both pull in the v2 IO
 // protocol everywhere in the ISS. The two headers define clashing types
 // in the ``vp::`` namespace (IoReq, IoMaster, IoSlave), so we can only
-// pull in one of them per translation unit — the choice is tied to the
-// LSU implementation because it is the component that owns the master
-// ``data`` port.
-#ifdef CONFIG_GVSOC_ISS_LSU_V2
+// pull in one of them per translation unit — as soon as any v2-using
+// component is enabled we have to pick io_v2.hpp for the whole ISS.
+#if defined(CONFIG_GVSOC_ISS_LSU_V2) || defined(CONFIG_GVSOC_ISS_VLSU_V2)
 #include <vp/itf/io_v2.hpp>
 #else
 #include <vp/itf/io.hpp>

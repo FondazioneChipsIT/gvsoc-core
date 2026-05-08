@@ -116,6 +116,92 @@ public:
 
 #if defined(CONFIG_GVSOC_ISS_USE_SPATZ)
 
+#if defined(CONFIG_GVSOC_ISS_VLSU_V2)
+
+// Block processing load/store vector instructions, io_v2 variant.
+//
+// Functionally mirrors the v1 ``VuLsu`` (same FSM, same instruction handling)
+// but talks to the TCDM through master ports built on ``vp/itf/io_v2.hpp``:
+// status codes are ``IO_REQ_DONE``/``GRANTED``/``DENIED``, error reporting
+// rides on the response status (``IO_RESP_OK``/``IO_RESP_INVALID``), and the
+// retry/resp callbacks are mandatory (passed at port construction time).
+class VuLsu : public VuBlock
+{
+public:
+
+    void reset(bool active) override;
+    void start() override;
+    VuLsu(Vu &vu, Iss &iss);
+    bool is_full() override { return this->nb_pending_insn.get() == VuLsu::queue_size; }
+    void enqueue_insn(PendingInsn *pending_insn) override;
+    void isa_init() override;
+
+private:
+    // Handler for internal FSM
+    static void fsm_handler(vp::Block *__this, vp::ClockEvent *event);
+    static void handle_insn_load(VuLsu *vlsu, iss_insn_t *insn);
+    static void handle_insn_store(VuLsu *vlsu, iss_insn_t *insn);
+    static void handle_insn_load_strided(VuLsu *vlsu, iss_insn_t *insn);
+    static void handle_insn_store_strided(VuLsu *vlsu, iss_insn_t *insn);
+    static void handle_insn_load_indexed(VuLsu *vlsu, iss_insn_t *insn);
+    static void handle_insn_store_indexed(VuLsu *vlsu, iss_insn_t *insn);
+
+    void handle_access(iss_insn_t *insn, bool is_write, int reg, bool do_stride=false, iss_reg_t stride=0, int reg_indexed=-1);
+
+    // io_v2 master callbacks — pure ready/valid signal (no request) on retry,
+    // and response notification on resp.
+    static void port_retry_muxed(vp::Block *__this, int id);
+    static void port_resp_muxed(vp::Block *__this, vp::IoReq *req, int id);
+
+    // Number of instruction that can be enqueued at the same time
+    static constexpr int queue_size = 4;
+
+    Vu &vu;
+    vp::Trace trace;
+    vp::Trace event_active;
+    std::vector<vp::Trace> event_addr;
+    std::vector<vp::Trace> event_size;
+    std::vector<vp::Trace> event_is_write;
+    vp::Trace event_queue;
+    vp::Trace event_pc;
+    vp::Event event_label;
+    vp::ClockEvent fsm_event;
+    std::vector<VuLsuPendingInsn> insns;
+    iss_addr_t pending_addr;
+    iss_addr_t pending_size;
+    bool pending_is_write;
+    uint8_t *pending_velem;
+    int pending_vreg;
+    int insn_first;
+    int insn_first_waiting;
+    int insn_last;
+    vp::Register<uint8_t> nb_pending_insn;
+    int nb_waiting_insn;
+    // Ports to the TCDM, used by VLSU for vector load and store operations.
+    // io_v2 master ports require retry/resp callbacks at construction time;
+    // we use the muxed variants so a single pair of callbacks dispatches by
+    // port id.
+    std::vector<vp::IoMaster> ports;
+    // Queues of requests. Each port has its own queue to model limited
+    // outstanding requests.
+    std::vector<vp::Queue *> req_queues;
+    // Whole list of requests for all ports
+    std::vector<vp::IoReq> requests;
+    int nb_ports;
+    iss_reg_t stride;
+    bool strided;
+    int elem_size;
+    int reg_indexed;
+    int pending_elem;
+    int inst_elem_size;
+    int64_t op_timestamp;
+    bool prev_is_write;
+    bool started;
+    int vstart;
+};
+
+#else
+
 // Block processing load/store vector instructions
 class VuLsu : public VuBlock
 {
@@ -216,6 +302,8 @@ private:
     bool started;
     int vstart;
 };
+
+#endif // CONFIG_GVSOC_ISS_VLSU_V2
 
 #else
 
