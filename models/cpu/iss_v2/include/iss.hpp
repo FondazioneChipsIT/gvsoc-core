@@ -31,6 +31,13 @@
 #include <cpu/iss_v2/include/vector.hpp>
 #endif
 
+#ifndef CONFIG_GVSOC_ISS_HWLOOP_OBJ
+// Default hwloop slot is empty (cores that don't enable hardware loops
+// pay nothing for the dispatch hook).
+#include <cpu/iss_v2/include/hwloop/empty.hpp>
+#define CONFIG_GVSOC_ISS_HWLOOP_OBJ HwloopEmpty
+#endif
+
 class Iss;
 
 class EmptyModule
@@ -72,6 +79,7 @@ public:
     CONFIG_GVSOC_ISS_MMU mmu;
     CONFIG_GVSOC_ISS_PMP pmp;
     CONFIG_GVSOC_ISS_EVENT timing;
+    CONFIG_GVSOC_ISS_HWLOOP_OBJ hwloop;
     CONFIG_GVSOC_ISS_ARCH arch;
 #ifdef CONFIG_GVSOC_ISS_OFFLOAD
     CONFIG_GVSOC_ISS_OFFLOAD offload;

@@ -221,6 +221,32 @@ class Event(IssModule):
         iss.isa.add_implem_include('<cpu/iss_v2/include/event/event_implem.hpp>')
 
 
+class Hwloop(IssModule):
+    """Hardware-loop module (CoreV / PULP-style ``Xhwloop``).
+
+    Plug into the ``hwloop`` slot of :class:`Riscv` / :class:`RiscvCommon`
+    to enable hardware-loop semantics: each loop has a (start, end,
+    count) triple, and after every retired instruction the dispatch
+    loop calls ``iss.hwloop.check(pc, next_pc)`` to redirect to the
+    loop start when a counter is non-zero.
+
+    Cores that omit this module fall back to the empty slot (``HwloopEmpty``)
+    whose ``check()`` is a no-op the compiler eliminates from the
+    dispatch hot path.
+    """
+    def __init__(self, nb_loops: int = 2):
+        self.nb_loops = nb_loops
+
+    @override
+    def gen(self, iss):
+        iss.isa.add_define('CONFIG_GVSOC_ISS_HWLOOP', '1')
+        iss.isa.add_define('CONFIG_GVSOC_ISS_HWLOOP_OBJ', 'Hwloop')
+        iss.isa.add_define('CONFIG_GVSOC_ISS_NB_HWLOOP', self.nb_loops)
+        iss.isa.add_include('<cpu/iss_v2/include/hwloop/hwloop.hpp>')
+        iss.add_sources(['cpu/iss_v2/src/hwloop/hwloop.cpp'])
+        iss.isa.add_implem_include('<cpu/iss_v2/include/hwloop/hwloop_implem.hpp>')
+
+
 class RiscvCommon(st.Component):
     """
     Riscv instruction set simulator
@@ -381,6 +407,9 @@ class RiscvCommon(st.Component):
 
         if zfinx or isa.has_extension('zfinx'):
             self.add_c_flags(['-DCONFIG_GVSOC_ISS_ZFINX=1'])
+
+        if zdinx or isa.has_extension('zdinx'):
+            self.add_c_flags(['-DCONFIG_GVSOC_ISS_ZDINX=1'])
 
         fp_size = fp_width if fp_width is not None else  64 if isa.has_isa('rvd') else 32
         self.add_c_flags([f'-DCONFIG_GVSOC_ISS_FP_WIDTH={fp_size}'])

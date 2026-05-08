@@ -43,6 +43,7 @@ void Iss::start()
     this->mmu.start();
     this->pmp.start();
     this->timing.start();
+    this->hwloop.start();
 #ifdef CONFIG_GVSOC_ISS_OFFLOAD
     this->offload.start();
 #endif
@@ -70,6 +71,7 @@ void Iss::stop()
     this->mmu.stop();
     this->pmp.stop();
     this->timing.stop();
+    this->hwloop.stop();
 #ifdef CONFIG_GVSOC_ISS_OFFLOAD
     this->offload.stop();
 #endif
@@ -97,6 +99,7 @@ void Iss::reset(bool active)
     this->mmu.reset(active);
     this->pmp.reset(active);
     this->timing.reset(active);
+    this->hwloop.reset(active);
 #ifdef CONFIG_GVSOC_ISS_OFFLOAD
     this->offload.reset(active);
 #endif
@@ -110,7 +113,7 @@ vector(*this),
 #endif
 exec(*this), regfile(*this),
 csr(*this), prefetch(*this), lsu(*this), core(*this), irq(*this), exception(*this), mmu(*this),
-pmp(*this), timing(*this), arch(*this)
+pmp(*this), timing(*this), hwloop(*this), arch(*this)
 #ifdef CONFIG_GVSOC_ISS_OFFLOAD
 , offload(*this)
 #endif
