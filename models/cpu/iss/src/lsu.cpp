@@ -239,17 +239,7 @@ int Lsu::data_req_aligned(iss_addr_t addr, uint8_t *data_ptr, uint8_t *memcheck_
     {
         latency = req->get_latency() + 1;
 
-#ifdef CONFIG_GVSOC_ISS_CV32E40P
-        // CV32E40P has no bus-error input on its data OBI interface, so the core
-        // can never take a load/store access fault: the RTL testbench memory agent
-        // answers any address, returning 0 for never-written locations. Match RTL:
-        // complete the access instead of trapping, reads return 0, writes are dropped.
-        if (!is_write)
-        {
-            memset(data_ptr, 0, size);
-        }
-        return 0;
-#elif !defined(CONFIG_GVSOC_ISS_RISCV_EXCEPTIONS)
+#ifndef CONFIG_GVSOC_ISS_RISCV_EXCEPTIONS
         if (this->iss.gdbserver.gdbserver)
         {
             this->trace.msg(vp::Trace::LEVEL_WARNING,"Invalid access (pc: 0x%" PRIxFULLREG ", offset: 0x%" PRIxFULLREG ", size: 0x%x, is_write: %d)\n",
