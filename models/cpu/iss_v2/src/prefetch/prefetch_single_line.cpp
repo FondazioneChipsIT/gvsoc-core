@@ -530,6 +530,13 @@ bool PrefetchSingleLine::fetch(iss_reg_t addr)
 #endif
 
     unsigned int index = phys_addr - this->buffer_start_addr;
+    // index is where addr falls in the copy of the line. flush() marks the copy as empty by
+    // setting its start to -1, but then index is addr + 1, and for a low addr it still falls
+    // inside the copy, so old bytes would be used: refill instead.
+    if (unlikely(this->buffer_start_addr == (iss_addr_t)-1))
+    {
+        index = CONFIG_GVSOC_ISS_PREFETCH_SIZE;
+    }
 
     // If it is entirely within the buffer, get the opcode and decode it.
     if (likely(index <= CONFIG_GVSOC_ISS_PREFETCH_SIZE - sizeof(iss_opcode_t)))
