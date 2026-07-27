@@ -176,33 +176,36 @@ static inline unsigned int lib_MAC_SH_SH_NR(Iss *s, unsigned int a, unsigned int
 static inline unsigned int lib_MAC_ZL_ZL_NR(Iss *s, unsigned int a, unsigned int b, unsigned int c, unsigned int shift) { return ((uint32_t)(a + ZL(b) * ZL(c))) >> shift; }
 static inline unsigned int lib_MAC_ZH_ZH_NR(Iss *s, unsigned int a, unsigned int b, unsigned int c, unsigned int shift) { return ((uint32_t)(a + ZH(b) * ZH(c))) >> shift; }
 
+/* The rounding constant takes part in the 32-bit wrap of the accumulate sum
+ * (RI5CY-family mult datapath); adding it after the wrap flips the result
+ * sign when a + product + round crosses the 32-bit boundary. */
 static inline unsigned int lib_MAC_SL_SL_NR_R(Iss *s, unsigned int a, unsigned int b, unsigned int c, unsigned int shift)
 {
-    int32_t result = (int32_t)(a + SL(b) * SL(c));
+    uint32_t result = a + SL(b) * SL(c);
     if (shift > 0)
-        result = (result + (1ULL << (shift - 1))) >> shift;
-    return result;
+        result += 1u << (shift - 1);
+    return ((int32_t)result) >> shift;
 }
 static inline unsigned int lib_MAC_SH_SH_NR_R(Iss *s, unsigned int a, unsigned int b, unsigned int c, unsigned int shift)
 {
-    int32_t result = (int32_t)(a + SH(b) * SH(c));
+    uint32_t result = a + SH(b) * SH(c);
     if (shift > 0)
-        result = (result + (1ULL << (shift - 1))) >> shift;
-    return result;
+        result += 1u << (shift - 1);
+    return ((int32_t)result) >> shift;
 }
 static inline unsigned int lib_MAC_ZL_ZL_NR_R(Iss *s, unsigned int a, unsigned int b, unsigned int c, unsigned int shift)
 {
-    uint32_t result = (uint32_t)(a + ZL(b) * ZL(c));
+    uint32_t result = a + (uint32_t)ZL(b) * ZL(c);
     if (shift > 0)
-        result = (result + (1ULL << (shift - 1))) >> shift;
-    return result;
+        result += 1u << (shift - 1);
+    return result >> shift;
 }
 static inline unsigned int lib_MAC_ZH_ZH_NR_R(Iss *s, unsigned int a, unsigned int b, unsigned int c, unsigned int shift)
 {
-    uint32_t result = (uint32_t)(a + ZH(b) * ZH(c));
+    uint32_t result = a + (uint32_t)ZH(b) * ZH(c);
     if (shift > 0)
-        result = (result + (1ULL << (shift - 1))) >> shift;
-    return result;
+        result += 1u << (shift - 1);
+    return result >> shift;
 }
 
 static inline unsigned int lib_MSU_SL_SL(Iss *s, unsigned int a, unsigned int b, unsigned int c) { return a - SL(b) * SL(c); }
@@ -1496,6 +1499,13 @@ static inline void clear_fflags(Iss *iss, unsigned long int fflags)
 // updates the fflags from fenv exceptions
 static inline void update_fflags_fenv(Iss *iss)
 {
+#if defined(CONFIG_GVSOC_ISS_CV32E40P) || defined(CONFIG_GVSOC_ISS_CV32E40P_FP_TRAPS)
+    // A trapped FP instruction (reserved rounding mode, see setFFRoundingMode)
+    // must not update fflags: the RTL kills every side effect of an
+    // instruction that raised illegal-instruction.
+    if (iss->exec.has_exception)
+        return;
+#endif
     int ex = fetestexcept(FE_ALL_EXCEPT);
     int flags = !!(ex & FE_INEXACT) |
                 !!(ex & FE_UNDERFLOW) << 1 |
@@ -1719,9 +1729,25 @@ static inline unsigned long int setFFRoundingMode(Iss *s, unsigned long int mode
         fesetround(FE_UPWARD);
         break;
     case 4:
-        printf("Unimplemented roudning mode nearest ties to max magnitude");
-        exit(-1);
+        // RMM has no fenv equivalent: nearest plus the flexfloat ties-away flag.
+        fesetround(FE_TONEAREST);
+        flexfloat_rmm = 1;
         break;
+#if defined(CONFIG_GVSOC_ISS_CV32E40P) || defined(CONFIG_GVSOC_ISS_CV32E40P_FP_TRAPS)
+    case 5:
+    case 6:
+        // Reserved static rounding modes: illegal-instruction on the RTL
+        // (RISC-V F spec, rm 101/110 reserved). The FP op still runs after
+        // the raise; its writeback and fflags update are suppressed by the
+        // has_exception guards (macros.h FREG_SET, update_fflags_fenv).
+        s->exception.raise(s->exec.current_insn, ISS_EXCEPT_ILLEGAL);
+#ifdef CONFIG_GVSOC_ISS_CV32E40P_FP_TRAPS
+        // The iss_v2 macros have no write-back guard; the regfile
+        // personality drops the pending write instead.
+        s->regfile.wb_suppress_arm();
+#endif
+        break;
+#endif
     case 7:
     {
         switch (s->csr.fcsr.frm)
@@ -1739,9 +1765,21 @@ static inline unsigned long int setFFRoundingMode(Iss *s, unsigned long int mode
             fesetround(FE_UPWARD);
             break;
         case 4:
-            printf("Unimplemented roudning mode nearest ties to max magnitude");
-            exit(-1);
+            fesetround(FE_TONEAREST);
+            flexfloat_rmm = 1;
             break;
+#if defined(CONFIG_GVSOC_ISS_CV32E40P) || defined(CONFIG_GVSOC_ISS_CV32E40P_FP_TRAPS)
+        case 5:
+        case 6:
+        case 7:
+            // Dynamic rounding with a reserved frm value: illegal-instruction
+            // on the RTL (frm 101/110/111 reserved on use).
+            s->exception.raise(s->exec.current_insn, ISS_EXCEPT_ILLEGAL);
+#ifdef CONFIG_GVSOC_ISS_CV32E40P_FP_TRAPS
+            s->regfile.wb_suppress_arm();
+#endif
+            break;
+#endif
         }
     }
     }
@@ -1750,6 +1788,7 @@ static inline unsigned long int setFFRoundingMode(Iss *s, unsigned long int mode
 
 static inline void restoreFFRoundingMode(unsigned long int mode)
 {
+    flexfloat_rmm = 0;
     fesetround(mode);
 }
 
