@@ -54,10 +54,15 @@ vp_model(NAME utils.io_v2_beat_to_sync_adapter
 # (IoV2BeatToSingleReqAdapterConfig); the generated struct header lands under the
 # engine binary dir, so add it to the include path for this standalone build
 # (target-driven gen_ builds get it automatically).
+#
+# Two candidate paths because the engine binary dir depends on how gvsoc is
+# embedded: '<build>/gvsoc/engine' when it is a nested subproject (SDK builds),
+# '<build>/engine' when gvsoc itself is the top-level project (standalone
+# 'make build'). A non-existent include dir is harmless, so both are passed.
 # ---------------------------------------------------------------------------
 vp_model(NAME utils.io_v2_beat_to_single_req_adapter
     SOURCES "io_v2_beat_to_single_req_adapter.cpp"
-    INCLUDES "${CMAKE_BINARY_DIR}/gvsoc/engine"
+    INCLUDES "${CMAKE_BINARY_DIR}/gvsoc/engine" "${CMAKE_BINARY_DIR}/engine"
 )
 
 # ---------------------------------------------------------------------------
@@ -70,7 +75,7 @@ vp_model(NAME utils.io_v2_beat_to_single_req_adapter
 # ---------------------------------------------------------------------------
 vp_model(NAME utils.io_v2_beat_width_adapter
     SOURCES "io_v2_beat_width_adapter.cpp"
-    INCLUDES "${CMAKE_BINARY_DIR}/gvsoc/engine"
+    INCLUDES "${CMAKE_BINARY_DIR}/gvsoc/engine" "${CMAKE_BINARY_DIR}/engine"
 )
 
 # ---------------------------------------------------------------------------
@@ -84,7 +89,7 @@ vp_model(NAME utils.io_v2_beat_width_adapter
 # ---------------------------------------------------------------------------
 vp_model(NAME utils.io_v2_single_req_to_beat_adapter
     SOURCES "io_v2_single_req_to_beat_adapter.cpp"
-    INCLUDES "${CMAKE_BINARY_DIR}/gvsoc/engine"
+    INCLUDES "${CMAKE_BINARY_DIR}/gvsoc/engine" "${CMAKE_BINARY_DIR}/engine"
 )
 
 # ---------------------------------------------------------------------------
@@ -98,7 +103,7 @@ vp_model(NAME utils.io_v2_single_req_to_beat_adapter
 # ---------------------------------------------------------------------------
 vp_model(NAME utils.io_v2_single_req_width_adapter
     SOURCES "io_v2_single_req_width_adapter.cpp"
-    INCLUDES "${CMAKE_BINARY_DIR}/gvsoc/engine"
+    INCLUDES "${CMAKE_BINARY_DIR}/gvsoc/engine" "${CMAKE_BINARY_DIR}/engine"
 )
 
 add_subdirectory(loader)
