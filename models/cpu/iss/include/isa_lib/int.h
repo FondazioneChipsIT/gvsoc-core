@@ -1503,15 +1503,17 @@ static inline int32_t double_to_int(Iss *s, double dbl_i)
 {
     double dbl = nearbyint(dbl_i);
 
-    if (dbl != dbl_i)
-    {
-        set_fflags(s, 1ULL << 0);
-    }
-
     if (dbl < 2.0 * (INT32_MAX / 2 + 1))
     {                               // NO OVERFLOW
         if (ceil(dbl) >= INT32_MIN) // NO UNDERFLOW
+        {
+            // NX only for a valid conversion: NaN and out of range values raise NV alone.
+            if (dbl != dbl_i)
+            {
+                set_fflags(s, 1ULL << 0);
+            }
             return (int32_t)dbl;
+        }
         else // UNDERFLOW
         {
             set_fflags(s, 1ULL << 4);
@@ -1530,15 +1532,17 @@ static inline uint32_t double_to_uint(Iss *s, double dbl_i)
 {
     double dbl = nearbyint(dbl_i);
 
-    if (dbl != dbl_i)
-    {
-        set_fflags(s, 1ULL << 0);
-    }
-
     if (dbl < 2.0 * (UINT32_MAX / 2 + 1))
     {                       // NO OVERFLOW
         if (ceil(dbl) >= 0) // NO UNDERFLOW
+        {
+            // NX only for a valid conversion: NaN and out of range values raise NV alone.
+            if (dbl != dbl_i)
+            {
+                set_fflags(s, 1ULL << 0);
+            }
             return (uint32_t)dbl;
+        }
         else // UNDERFLOW
         {
             set_fflags(s, 1ULL << 4);
@@ -1897,6 +1901,11 @@ static inline unsigned long int lib_flexfloat_min(Iss *s, unsigned long int a, u
 #ifdef OLD
     FF_EXEC_2(s, ff_min, a, b, e, m)
 #else
+    // A signaling NaN raises NV, as in lib_flexfloat_max.
+    if (IsNan(a, e, m) == 2 || IsNan(b, e, m) == 2)
+    {
+        set_fflags(s, 1ULL << 4);
+    }
     int Nan_a = IsNan(a, e, m);
     int Nan_b = IsNan(b, e, m);
     unsigned long int Nan_Q = (((1ULL << e) - 1) << m) | ((unsigned long int)1ULL << (m - 1));
@@ -1998,7 +2007,10 @@ static inline long int lib_flexfloat_cvt_ff_w_round(Iss *s, int64_t a, uint8_t e
 {
     int old = setFFRoundingMode(s, round);
     flexfloat_t ff_a;
+    // Report the NX raised when the integer does not fit in the mantissa.
+    feclearexcept(FE_ALL_EXCEPT);
     ff_init_int(&ff_a, a & 0xffffffff, (flexfloat_desc_t){e, m});
+    update_fflags_fenv(s);
     restoreFFRoundingMode(old);
     return flexfloat_get_bits(&ff_a);
 }
@@ -2007,7 +2019,10 @@ static inline unsigned long int lib_flexfloat_cvt_ff_wu_round(Iss *s, int64_t a,
 {
     int old = setFFRoundingMode(s, round);
     flexfloat_t ff_a;
+    // Report the NX, as in lib_flexfloat_cvt_ff_w_round.
+    feclearexcept(FE_ALL_EXCEPT);
     ff_init_long(&ff_a, (uint32_t)a & 0xffffffff, (flexfloat_desc_t){e, m});
+    update_fflags_fenv(s);
     restoreFFRoundingMode(old);
     return flexfloat_get_bits(&ff_a);
 }
