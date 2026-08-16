@@ -1964,20 +1964,31 @@ static inline int64_t lib_flexfloat_cvt_w_ff_round(Iss *s, unsigned long int a, 
     unsigned long int new_round = round == 4 ? 2 : round;
     old = setFFRoundingMode(s, new_round);
     FF_INIT_1(a, e, m)
-    if (round == 4)
+    if (round == 4 && ff_a.value == ff_a.value /* !NaN */)
     {
-        if (ff_a.value < 0)
+        // RMM is trunc(|x| + 0.5) with the sign of x; the host is in RDN, so the sum
+        // cannot round up. NX if the result differs from x, NV alone if out of range.
+        neg = ff_a.value < 0;
+        double mag = neg ? -ff_a.value : ff_a.value;
+        double t = trunc(mag + 0.5);
+        double lim = neg ? 2147483648.0 : 2147483647.0; // int32 goes from -2^31 to 2^31 - 1
+        int32_t result_rmm;
+        if (t > lim)
         {
-            ff_a.value = -ff_a.value;
-            neg = true;
+            set_fflags(s, 1ULL << 4);  /* invalid only */
+            result_rmm = neg ? INT32_MIN : INT32_MAX;
         }
-        ff_a.value += 0.5f;
+        else
+        {
+            double rounded = neg ? -t : t;
+            result_rmm = (int32_t)rounded;
+            if (rounded != ff_a.value)
+                set_fflags(s, 1ULL << 0);  /* inexact */
+        }
+        restoreFFRoundingMode(old);
+        return iss_get_signed_value(result_rmm, 32);
     }
     int32_t result_int = double_to_int(s, ff_a.value);
-    if (neg)
-    {
-        result_int = -result_int;
-    }
     restoreFFRoundingMode(new_round);
     return iss_get_signed_value(result_int, 32);
 }
@@ -1985,18 +1996,47 @@ static inline int64_t lib_flexfloat_cvt_w_ff_round(Iss *s, unsigned long int a, 
 static inline int64_t lib_flexfloat_cvt_wu_ff_round(Iss *s, unsigned long int a, uint8_t e, uint8_t m, unsigned long int round)
 {
     int old;
-    bool neg = false;
     unsigned long int new_round = round == 4 ? 2 : round;
     old = setFFRoundingMode(s, new_round);
     FF_INIT_1(a, e, m)
-    if (round == 4)
+    if (round == 4 && ff_a.value == ff_a.value /* !NaN */)
     {
-        if (ff_a.value < 0)
+        // As in lib_flexfloat_cvt_w_ff_round. A negative x that rounds to a nonzero
+        // value is out of range: 0 with NV alone.
+        double v = ff_a.value;
+        int32_t result_rmm;
+        if (v < 0)
         {
-            ff_a.value = -ff_a.value;
-            neg = true;
+            double t = trunc(-v + 0.5);
+            if (t > 0)
+            {
+                set_fflags(s, 1ULL << 4);  /* out of range */
+                result_rmm = 0;
+            }
+            else
+            {
+                result_rmm = 0;            /* rounds to 0 */
+                if (v != 0.0)
+                    set_fflags(s, 1ULL << 0);
+            }
         }
-        ff_a.value += 0.5f;
+        else
+        {
+            double t = trunc(v + 0.5);
+            if (t > 4294967295.0)
+            {
+                set_fflags(s, 1ULL << 4);
+                result_rmm = (int32_t)UINT32_MAX;
+            }
+            else
+            {
+                result_rmm = (int32_t)(uint32_t)t;
+                if (t != v)
+                    set_fflags(s, 1ULL << 0);
+            }
+        }
+        restoreFFRoundingMode(old);
+        return (int64_t)result_rmm;
     }
     int32_t result_int = double_to_uint(s, ff_a.value);
     restoreFFRoundingMode(old);
